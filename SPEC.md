@@ -3,7 +3,26 @@
 **Working name:** Kept (changeable)
 **Owner:** single user (Yash)
 **Status:** decisions frozen 18 Oct 2026 · ready for Antigravity handoff
-**Stack:** React 18 + Vite + Tailwind CSS · localStorage · no backend · no accounts
+**Stack:** React 19 + Vite + Tailwind CSS · localStorage · optional Supabase sync
+
+---
+
+> **Implementation status — 19 Oct 2026.** The shipped app deliberately deviates from the
+> frozen decisions below. This block supersedes any conflicting line.
+>
+> - **Cloud sync is optional, not forbidden.** Local-first remains the default. Without
+>   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` there is no network at all. With them, a signed-in
+>   user gets background pull/push. See `supabase/README.md`.
+> - **Sound is opt-in**, off by default (`settings.soundEnabled`), persisted across reloads.
+> - **Clean extras are opt-in** (`settings.cleanExtras`). Friction Hold and the Vulnerability Clock
+>   are hidden by default; the daily page is the two-button clean/slip record.
+> - **Study keeps optional tags/protocols** and an editable target (`settings.studyTargetHours`).
+> - **Progression allows one rep of grace:** with N prescribed sets, N−1 at the top of the range and
+>   one at `repHigh − 1` still adds weight. Two short sets hold.
+> - **Running unlocks on a rising 3-day average**, not a single pair of weigh-ins.
+> - **Charts accept tap** (pointer) in addition to hover.
+> - **Export reminder:** `settings.lastExportAt` drives the "last export" line.
+> - **Docs source of truth:** the root `*.md` files. The former `docs/` duplicates were removed.
 
 ---
 
@@ -32,7 +51,7 @@ The product is a record, not a coach. No scores, no badges, no praise, no social
 | Overall performance | Charts + heatmaps. **No score, no level, no ranking** |
 | Storage | localStorage. Local JSON export/import |
 | Devices | Phone and laptop (mobile-first, responsive) |
-| Deployment | Local now. Deploy later (Vercel) — no cloud sync |
+| Deployment | Static hosting (Vercel/Netlify/Pages). Optional Supabase sync — see `supabase/README.md` |
 
 ### Explicit non-goals (do not build)
 

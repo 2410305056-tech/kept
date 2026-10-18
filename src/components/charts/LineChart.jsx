@@ -12,6 +12,7 @@ export function LineChart({
 }) {
   const reduced = useReducedMotion();
   const [hoverIndex, setHoverIndex] = useState(null);
+  const [pinned, setPinned] = useState(false);
 
   try {
     if (!data || data.length === 0) {
@@ -76,7 +77,15 @@ export function LineChart({
         <svg
           viewBox={`0 0 ${svgWidth} ${height}`}
           className="w-full overflow-visible"
-          onMouseLeave={() => setHoverIndex(null)}
+          onMouseLeave={() => {
+            if (!pinned) setHoverIndex(null);
+          }}
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setPinned(false);
+              setHoverIndex(null);
+            }
+          }}
         >
           <defs>
             <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
@@ -143,7 +152,15 @@ export function LineChart({
             const isHovered = hoverIndex === i;
 
             return (
-              <g key={i} onMouseEnter={() => setHoverIndex(i)} className="cursor-pointer">
+              <g
+                key={i}
+                onMouseEnter={() => setHoverIndex(i)}
+                onPointerDown={(e) => {
+                  setHoverIndex(i);
+                  if (e.pointerType !== "mouse") setPinned(true);
+                }}
+                className="cursor-pointer"
+              >
                 <circle
                   cx={cx}
                   cy={cy}

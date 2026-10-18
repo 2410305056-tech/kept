@@ -16,6 +16,8 @@ export function CleanPage() {
   const { today } = useNow();
   const { showToast } = useContext(ToastContext);
   const [isHoldModalOpen, setIsHoldModalOpen] = useState(false);
+  // Friction Hold and the Vulnerability Clock are opt-in extras.
+  const extras = Boolean(state.settings?.cleanExtras);
 
   const cleanLog = state.cleanLog || [];
   const stats = cleanStats(cleanLog, today);
@@ -92,9 +94,11 @@ export function CleanPage() {
           <Odometer value={stats.current} />
         </div>
 
-        <p className="text-xs font-mono text-[var(--text-2)] max-w-sm">
-          {assessment}
-        </p>
+        {extras && (
+          <p className="text-xs font-mono text-[var(--text-2)] max-w-sm">
+            {assessment}
+          </p>
+        )}
 
         <div className="flex items-center gap-3 text-xs font-mono text-[var(--text-3)] pt-1">
           <span>Best: <strong className="text-[var(--text-1)]">{stats.best} days</strong></span>
@@ -122,14 +126,16 @@ export function CleanPage() {
             I slipped
           </Button>
 
-          <Button
-            variant="ghost"
-            size="lg"
-            onClick={() => setIsHoldModalOpen(true)}
-            className="w-full h-12 text-sm font-semibold keycap border border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent-soft)]"
-          >
-            🛡 Friction Hold (120s)
-          </Button>
+          {extras && (
+            <Button
+              variant="ghost"
+              size="lg"
+              onClick={() => setIsHoldModalOpen(true)}
+              className="w-full h-12 text-sm font-semibold keycap border border-[var(--accent)]/30 text-[var(--accent)] hover:bg-[var(--accent-soft)]"
+            >
+              🛡 Friction Hold (120s)
+            </Button>
+          )}
         </div>
       </Card>
 
@@ -196,26 +202,30 @@ export function CleanPage() {
       </Card>
 
       {/* 24-Hour Vulnerability Radial Clock */}
-      <VulnerabilityClock
-        cleanLog={cleanLog}
-        frictionHolds={state.cleanFrictionHolds || []}
-      />
+      {extras && (
+        <VulnerabilityClock
+          cleanLog={cleanLog}
+          frictionHolds={state.cleanFrictionHolds || []}
+        />
+      )}
 
       {/* 120-Second Friction Hold Modal */}
-      <FrictionHoldModal
-        isOpen={isHoldModalOpen}
-        onClose={() => setIsHoldModalOpen(false)}
-        onCompleted={() => {
-          setState((prev) => ({
-            ...prev,
-            cleanFrictionHolds: [
-              ...(prev.cleanFrictionHolds || []),
-              { timestamp: new Date().toISOString() }
-            ]
-          }));
-          showToast("120s Friction Hold completed. Impulse cleared.");
-        }}
-      />
+      {extras && (
+        <FrictionHoldModal
+          isOpen={isHoldModalOpen}
+          onClose={() => setIsHoldModalOpen(false)}
+          onCompleted={() => {
+            setState((prev) => ({
+              ...prev,
+              cleanFrictionHolds: [
+                ...(prev.cleanFrictionHolds || []),
+                { timestamp: new Date().toISOString() }
+              ]
+            }));
+            showToast("120s Friction Hold completed. Impulse cleared.");
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -1,3 +1,7 @@
+> **Historical generation prompt — 19 Oct 2026.** The app is built. Where this file says
+> "no cloud", "no sound", or "no extras", the Implementation Status block in `SPEC.md`
+> and the shipped code win. Do not remove existing features on a rebuild.
+
 You are the entire product team — a 30-year product designer, a senior front-end engineer, and a QA engineer — building "Kept", a private single-user habit and training tracker, in this workspace.
 
 STEP 0 — READ BEFORE ANY CODE

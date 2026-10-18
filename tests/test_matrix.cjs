@@ -90,6 +90,25 @@ async function runTests() {
   assert.strictEqual(sugPartial.weight, 5, "Weight must hold at 5 kg");
   console.log("✓ Test 2d Passed: 4 of 5 prescribed sets in Build holds the weight");
 
+  // Test 2e: one-rep grace. Five prescribed sets, four at the top and one at
+  // repHigh - 1, still progresses. Two short sets do not.
+  const fiveSets = (reps) => ({
+    date: "2026-11-16",
+    exercises: [{
+      exerciseId: lateral.id,
+      name: lateral.name,
+      sets: reps.map((r) => ({ weightKg: 5, reps: r, rir: 1, done: true }))
+    }]
+  });
+  const grace = suggestForWeek(lateral, [fiveSets([15, 15, 15, 15, 14])], 5);
+  assert.strictEqual(grace.reason, "up", "One rep short on one of five sets must still progress");
+  assert.strictEqual(grace.weight, 6.25, "Lateral raise should progress to 6.25 kg");
+
+  const noGrace = suggestForWeek(lateral, [fiveSets([15, 15, 15, 14, 13])], 5);
+  assert.strictEqual(noGrace.reason, "hold", "Two short sets must hold");
+  assert.strictEqual(noGrace.weight, 5, "Weight must hold at 5 kg");
+  console.log("✓ Test 2e Passed: one-rep grace progresses, two short sets hold");
+
   // Test 2c / Correction 4: Down case for 20kg lift -> round2_5(20 * 0.9) = 17.5kg
   const sessionMiss1 = {
     date: "2026-10-19",
@@ -126,6 +145,36 @@ async function runTests() {
   const logsRising = [{ date: "2026-10-19", weightKg: 65 }, { date: "2026-10-26", weightKg: 65.4 }];
   assert.strictEqual(runningUnlocked(logsRising, "2026-11-16"), true, "Running unlocks when weight rises after Nov 16");
   console.log("✓ Test 4 Passed: Week 5 Build increases bump sets (4->5, 3->4) and running unlocks only on rising weight");
+
+  // Test 4b: the gate compares 3-day averages, so one water-weight dip does
+  // not lock running again.
+  const smoothing = [
+    { date: "2026-10-19", weightKg: 65.0 },
+    { date: "2026-10-26", weightKg: 65.4 },
+    { date: "2026-11-02", weightKg: 65.8 },
+    { date: "2026-11-09", weightKg: 66.0 },
+    { date: "2026-11-16", weightKg: 65.7 },
+    { date: "2026-11-18", weightKg: 65.2 },
+  ];
+  assert.strictEqual(
+    runningUnlocked(smoothing, "2026-11-19"),
+    true,
+    "Rising 3-day average unlocks even after a dip"
+  );
+  const declining = [
+    { date: "2026-10-19", weightKg: 66.0 },
+    { date: "2026-10-26", weightKg: 65.8 },
+    { date: "2026-11-02", weightKg: 65.6 },
+    { date: "2026-11-09", weightKg: 65.4 },
+    { date: "2026-11-16", weightKg: 65.2 },
+    { date: "2026-11-18", weightKg: 65.0 },
+  ];
+  assert.strictEqual(
+    runningUnlocked(declining, "2026-11-19"),
+    false,
+    "Falling 3-day average stays locked"
+  );
+  console.log("✓ Test 4b Passed: running gate uses 3-day averages and ignores a single dip");
 
   // Test 5: ?date=2026-12-07 -> Week 8 (Deload). Every exercise = 2 sets. Weight holds.
   const w8 = weekNumber(plan, "2026-12-07");

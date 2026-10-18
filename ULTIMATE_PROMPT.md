@@ -1,5 +1,9 @@
 # ULTIMATE PROMPT — Kept
 
+> **Historical generation prompt — 19 Oct 2026.** The app is built. Where this file says
+> "no cloud", "no accounts", or "no extras", the Implementation Status block in `SPEC.md`
+> and the shipped code win. Do not remove existing features on a rebuild.
+
 Paste this entire file into Antigravity, in the `selftracker` workspace that contains
 `SPEC.md`, `DESIGN.md`, `HANDOFF.md`, and `PROMPT.md`.
 

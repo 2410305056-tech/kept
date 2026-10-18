@@ -11,6 +11,7 @@ export function BarChart({
 }) {
   const reduced = useReducedMotion();
   const [hoverIndex, setHoverIndex] = useState(null);
+  const [pinned, setPinned] = useState(false);
 
   try {
     if (!data || data.length === 0 || data.every((d) => d.value === 0)) {
@@ -38,7 +39,15 @@ export function BarChart({
         <svg
           viewBox={`0 0 ${svgWidth} ${height}`}
           className="w-full overflow-visible"
-          onMouseLeave={() => setHoverIndex(null)}
+          onMouseLeave={() => {
+            if (!pinned) setHoverIndex(null);
+          }}
+          onPointerDown={(e) => {
+            if (e.target === e.currentTarget) {
+              setPinned(false);
+              setHoverIndex(null);
+            }
+          }}
         >
           {/* Baseline */}
           <line
@@ -58,7 +67,15 @@ export function BarChart({
             const isHovered = hoverIndex === i;
 
             return (
-              <g key={i} onMouseEnter={() => setHoverIndex(i)} className="cursor-pointer">
+              <g
+                key={i}
+                onMouseEnter={() => setHoverIndex(i)}
+                onPointerDown={(e) => {
+                  setHoverIndex(i);
+                  if (e.pointerType !== "mouse") setPinned(true);
+                }}
+                className="cursor-pointer"
+              >
                 {d.value > 0 && (
                   <motion.rect
                     x={x}

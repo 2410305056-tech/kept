@@ -39,7 +39,17 @@ export function suggestWeight(ex, sessions, week = 0) {
   const w = Math.max(...sets.map((s) => s.weightKg));
   // Required set count is phase-aware: weeks 5-7 and 9-12 prescribe extra sets on bump lifts.
   const targetSets = week > 0 ? setsFor(ex, week) : ex.sets;
-  const allTop = sets.length >= targetSets && sets.every((s) => s.reps >= ex.repHigh && (s.rir ?? ex.rir) <= 2);
+  const atTop = (s) => s.reps >= ex.repHigh && (s.rir ?? ex.rir) <= 2;
+  const topCount = sets.filter(atTop).length;
+  // One-rep grace: with 4-5 prescribed sets the final set often misses the top
+  // by a single rep. Allow exactly one such set when every other set is at top.
+  const graceFloor = Math.max(ex.repHigh - 1, ex.repLow);
+  const grace =
+    targetSets > 1 &&
+    sets.length >= targetSets &&
+    topCount === targetSets - 1 &&
+    sets.every((s) => s.reps >= graceFloor && (s.rir ?? ex.rir) <= 2);
+  const allTop = sets.length >= targetSets && (topCount === targetSets || grace);
 
   // consecutive sessions where the bottom of the range was missed
   const hist = sessions
@@ -94,8 +104,22 @@ export function cleanStats(log, today) {
 
 export function runningUnlocked(bodyLogs, today) {
   if (today < "2026-11-16") return false;
-  const last = [...bodyLogs].sort((a, b) => a.date.localeCompare(b.date)).slice(-2);
-  return last.length === 2 && last[1].weightKg > last[0].weightKg;
+  const logs = [...bodyLogs]
+    .filter((l) => l && l.date <= today && Number.isFinite(Number(l.weightKg)))
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (logs.length < 2) return false;
+
+  const mean = (arr) => arr.reduce((acc, l) => acc + Number(l.weightKg), 0) / arr.length;
+  const recent = logs.slice(-3);
+  const prior = logs.slice(-6, -3);
+
+  // Not enough history to smooth: compare the two most recent weigh-ins.
+  if (!prior.length) {
+    return Number(recent[recent.length - 1].weightKg) > Number(recent[0].weightKg);
+  }
+
+  // Compare 3-day averages so one water-weight dip does not flap the gate.
+  return mean(recent) > mean(prior) + 0.05;
 }
 
 export function marksFor(date, state) {

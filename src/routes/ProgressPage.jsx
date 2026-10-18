@@ -2,27 +2,37 @@ import React, { useState, useContext } from "react";
 import { useStore } from "../hooks/useStore.js";
 import { useNow } from "../hooks/useNow.js";
 import { useTilt } from "../hooks/useTilt.js";
-import { useReducedMotion } from "../hooks/useReducedMotion.js";
 import { weekNumber, phaseForWeek } from "../lib/logic.js";
+import { diffDays } from "../lib/dates.js";
 import { exportData, validateImportData } from "../lib/exportImport.js";
 import { resetToSeed, replaceState } from "../lib/store.js";
 import { Card } from "../components/ui/Card.jsx";
 import { Button } from "../components/ui/Button.jsx";
 import { Checkbox } from "../components/ui/Checkbox.jsx";
-import { Input } from "../components/ui/Input.jsx";
 import { BarChart } from "../components/charts/BarChart.jsx";
 import { Heatmap } from "../components/charts/Heatmap.jsx";
 import { PanelBoundary } from "../components/ui/ErrorBoundary.jsx";
+import { CloudPanel } from "../components/ui/CloudPanel.jsx";
 import { ToastContext } from "../context/ToastContext.js";
 
 export function ProgressPage() {
   const [state, setState] = useStore();
   const { today } = useNow();
-  const reduced = useReducedMotion();
   const tilt = useTilt(5);
   const { showToast } = useContext(ToastContext);
 
   const curWeek = weekNumber(state.plan, today);
+  const soundEnabled = Boolean(state.settings?.soundEnabled);
+  const cleanExtras = Boolean(state.settings?.cleanExtras);
+  const lastExportAt = state.settings?.lastExportAt || null;
+  const daysSinceExport = lastExportAt
+    ? Math.max(0, diffDays(lastExportAt.slice(0, 10), today))
+    : null;
+  const setSetting = (settingKey, value) =>
+    setState((prev) => ({
+      ...prev,
+      settings: { ...prev.settings, [settingKey]: value },
+    }));
 
   // Clear data double confirmation state
   const [clearInput, setClearInput] = useState("");
@@ -34,6 +44,10 @@ export function ProgressPage() {
 
   const handleExport = () => {
     exportData(state);
+    setState((prev) => ({
+      ...prev,
+      settings: { ...prev.settings, lastExportAt: new Date().toISOString() },
+    }));
     showToast("Data exported successfully");
   };
 
@@ -352,12 +366,57 @@ ${state.studySessions?.slice(-10)?.reverse()?.map((s) => `- **${s.date}**: ${s.m
           />
         </div>
 
+        <div className="flex items-center justify-between p-3.5 bg-[var(--surface-2)] rounded-[8px] border border-[var(--line)]">
+          <div>
+            <span className="text-xs font-mono text-[var(--text-1)] font-medium block">
+              Sound
+            </span>
+            <span className="text-[11px] text-[var(--text-3)] font-mono">
+              Rest-complete chime. Off by default, persisted across reloads.
+            </span>
+          </div>
+          <Checkbox
+            checked={soundEnabled}
+            onChange={(v) => setSetting("soundEnabled", v)}
+            aria-label="Toggle sound"
+          />
+        </div>
+
+        <div className="flex items-center justify-between p-3.5 bg-[var(--surface-2)] rounded-[8px] border border-[var(--line)]">
+          <div>
+            <span className="text-xs font-mono text-[var(--text-1)] font-medium block">
+              Clean Extras
+            </span>
+            <span className="text-[11px] text-[var(--text-3)] font-mono">
+              Show Friction Hold and the Vulnerability Clock on the Clean page.
+            </span>
+          </div>
+          <Checkbox
+            checked={cleanExtras}
+            onChange={(v) => setSetting("cleanExtras", v)}
+            aria-label="Toggle clean extras"
+          />
+        </div>
+
         {/* Backup / Export / Import */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="p-4 bg-[var(--surface-2)] rounded-[8px] border border-[var(--line)] space-y-2">
             <h4 className="text-xs font-mono uppercase text-[var(--text-2)]">Export Local Backup</h4>
             <p className="text-xs text-[var(--text-3)]">
               Download your entire dataset as pretty-printed JSON file.
+            </p>
+            <p
+              className={`text-[11px] font-mono ${
+                daysSinceExport == null || daysSinceExport > 7
+                  ? "text-[var(--warn)]"
+                  : "text-[var(--text-3)]"
+              }`}
+            >
+              {daysSinceExport == null
+                ? "No backup yet."
+                : daysSinceExport === 0
+                ? "Last export: today."
+                : `Last export: ${daysSinceExport} day${daysSinceExport === 1 ? "" : "s"} ago.`}
             </p>
             <div className="pt-2">
               <Button variant="ghost" size="md" onClick={handleExport}>
@@ -416,6 +475,9 @@ ${state.studySessions?.slice(-10)?.reverse()?.map((s) => `- **${s.date}**: ${s.m
             </div>
           </div>
         )}
+
+        {/* Cloud Sync */}
+        <CloudPanel />
 
         {/* Clear Data (Type CLEAR) */}
         <div className="p-4 bg-[var(--surface-2)] rounded-[8px] border border-[var(--line)] space-y-3">

@@ -6,6 +6,7 @@ import { BottomNav } from "./BottomNav.jsx";
 import { Toast } from "../ui/Toast.jsx";
 import { Sheet } from "../ui/Sheet.jsx";
 import { useStore } from "../../hooks/useStore.js";
+import { useCloudSync } from "../../hooks/useCloudSync.js";
 import { useNow } from "../../hooks/useNow.js";
 import { weekNumber, phaseForWeek } from "../../lib/logic.js";
 import { formatDisplayDate } from "../../lib/format.js";
@@ -14,6 +15,7 @@ import { ToastContext } from "../../context/ToastContext.js";
 
 export function AppShell() {
   const [state, , storageError] = useStore();
+  useCloudSync();
   const { today } = useNow();
   const navigate = useNavigate();
   const [toast, setToast] = useState(null);

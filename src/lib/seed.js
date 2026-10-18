@@ -119,6 +119,9 @@ export const createInitialState = () => ({
     studyTargetHours: 2,
     reminders: true,
     reduceMotion: false,
-    hadTestDayNotice: false
+    hadTestDayNotice: false,
+    soundEnabled: false,
+    cleanExtras: false,
+    lastExportAt: null
   }
 });

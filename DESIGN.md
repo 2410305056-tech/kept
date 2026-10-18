@@ -7,6 +7,10 @@ An engineer should be able to build the entire UI from this without asking a des
 machined surfaces, engraved numbers, one light source, one accent. Motion is mechanical,
 not playful. The tool disappears; the habit remains.
 
+> **Interaction additions (19 Oct 2026):** charts pin their tooltip on tap; sound is off by
+> default; Clean shows two buttons unless Clean Extras is enabled; cloud sync status lives in
+> Progress → Data & Preferences and never appears in the main navigation.
+
 ---
 
 ## 1. Ten design laws

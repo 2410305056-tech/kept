@@ -10,6 +10,7 @@ export function Heatmap({
 }) {
   const reduced = useReducedMotion();
   const [hoveredCell, setHoveredCell] = useState(null);
+  const [pinned, setPinned] = useState(false);
 
   try {
     if (!rows || rows.length === 0) {
@@ -28,7 +29,17 @@ export function Heatmap({
     return (
       <div className={`overflow-x-auto pb-2 ${className}`}>
         <div className="relative inline-block min-w-full">
-          <svg width={totalWidth} height={totalHeight} className="overflow-visible">
+          <svg
+            width={totalWidth}
+            height={totalHeight}
+            className="overflow-visible"
+            onPointerDown={(e) => {
+              if (e.target === e.currentTarget) {
+                setPinned(false);
+                setHoveredCell(null);
+              }
+            }}
+          >
             {rows.map((row, rIdx) => {
               const y = rIdx * (cellSize + gap);
 
@@ -59,7 +70,13 @@ export function Heatmap({
                       <g
                         key={day.date || cIdx}
                         onMouseEnter={() => setHoveredCell({ ...day, row: row.label, x, y })}
-                        onMouseLeave={() => setHoveredCell(null)}
+                        onMouseLeave={() => {
+                          if (!pinned) setHoveredCell(null);
+                        }}
+                        onPointerDown={(e) => {
+                          setHoveredCell({ ...day, row: row.label, x, y });
+                          if (e.pointerType !== "mouse") setPinned(true);
+                        }}
                         className="cursor-pointer"
                       >
                         <motion.rect

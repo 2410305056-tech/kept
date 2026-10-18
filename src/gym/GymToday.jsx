@@ -40,6 +40,8 @@ export function GymToday({ dateOverride }) {
   const activeDate = dateOverride || today;
   const navigate = useNavigate();
   const { showToast } = useContext(ToastContext);
+  // Sound is opt-in and stored in settings so it survives reloads.
+  const soundEnabled = Boolean(state.settings?.soundEnabled);
 
   const curWeek = weekNumber(state.plan, activeDate);
   const curPhase = phaseForWeek(curWeek);
@@ -93,7 +95,10 @@ export function GymToday({ dateOverride }) {
   const [lastCheckedKey, setLastCheckedKey] = useState(null);
   const [activePlateCalcExId, setActivePlateCalcExId] = useState(null);
   const [activeWarmupExId, setActiveWarmupExId] = useState(null);
-  const [isSoundMuted, setIsSoundMuted] = useState(false);
+
+  useEffect(() => {
+    sound.enabled = soundEnabled;
+  }, [soundEnabled]);
 
   // Elapsed workout timer
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -117,7 +122,7 @@ export function GymToday({ dateOverride }) {
       setRestSeconds((prev) => {
         if (prev <= 1) {
           // Play vintage precision chronograph chime
-          if (!isSoundMuted) {
+          if (soundEnabled) {
             sound.playRestCompleteChime();
           }
           // Micro haptic notification when rest ends
@@ -130,7 +135,7 @@ export function GymToday({ dateOverride }) {
       });
     }, 1000);
     return () => clearInterval(interval);
-  }, [restSeconds]);
+  }, [restSeconds, soundEnabled]);
 
   // Error state for zero completed sets
   const [finishError, setFinishError] = useState("");
@@ -406,13 +411,18 @@ export function GymToday({ dateOverride }) {
             <button
               type="button"
               onClick={() => {
-                setIsSoundMuted((prev) => !prev);
-                sound.enabled = isSoundMuted;
+                setState((prev) => ({
+                  ...prev,
+                  settings: {
+                    ...prev.settings,
+                    soundEnabled: !(prev.settings?.soundEnabled ?? false),
+                  },
+                }));
               }}
               className="px-2 py-1 bg-[var(--surface-2)] hover:bg-[var(--surface-3)] border border-[var(--line)] rounded text-[11px] font-mono text-[var(--text-2)] hover:text-[var(--text-1)] transition-colors cursor-pointer"
               title="Toggle audio chime"
             >
-              {isSoundMuted ? "🔇" : "🔔"}
+              {soundEnabled ? "Sound on" : "Sound off"}
             </button>
             <button
               type="button"
