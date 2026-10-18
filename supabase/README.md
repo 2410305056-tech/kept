@@ -56,8 +56,10 @@ npm run preview
 ```
 
 Hosting (Netlify, Vercel, Cloudflare Pages): add the same two variables to the
-build environment. For GitHub Pages, build with a GitHub Actions workflow and
-repository variables, because Pages only serves static files.
+build environment. For GitHub Pages, add them as repository **Actions
+variables** (Settings → Secrets and variables → Actions → Variables); the
+included workflow reads `vars.VITE_SUPABASE_URL` and
+`vars.VITE_SUPABASE_ANON_KEY` at build time.
 
 ## 5. Sign in
 

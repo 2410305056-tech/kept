@@ -4,6 +4,8 @@ Kept is a private, single-user training ledger designed to execute a structured 
 
 It is built as a precision instrument: dark, fast, quiet, monospace numerals, hand-rolled SVGs, and CSS 3D physics. It runs with zero network requests unless you opt into cloud sync.
 
+**Live:** <https://2410305056-tech.github.io/kept/>
+
 ---
 
 ## Architecture & Technology Stack
@@ -74,3 +76,19 @@ npm run lint
 ```
 
 The UI checks (calendar interactions, FLIP panel, timer accuracy, mobile chart taps) still need a browser/phone pass.
+
+---
+
+## Deployment
+
+Every push to `main` builds and deploys to GitHub Pages:
+<https://2410305056-tech.github.io/kept/>
+
+To enable cloud sync in the deployed build, add repository Actions variables
+(**Settings → Secrets and variables → Actions → Variables**):
+
+- `VITE_SUPABASE_URL`
+- `VITE_SUPABASE_ANON_KEY`
+
+Without them the deployed app is local-only on each device. The GitHub Pages
+workflow uses the `kept/` base path; local development stays at `/`.
