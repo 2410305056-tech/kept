@@ -1,0 +1,186 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+:root {
+  --bg:#08080A; --surface-1:#101013; --surface-2:#16161A; --surface-3:#1D1D22;
+  --line:#26262C; --line-strong:#34343C;
+  --text-1:#ECECEF; --text-2:#A0A0A8; --text-3:#6A6A73;
+  --accent:#C8F65C; --accent-ink:#0B0C06; --accent-soft:rgba(200,246,92,.12);
+  --warn:#F2C14E; --danger:#FF6B6B; --scrim:rgba(4,4,6,.72);
+
+  --font-sans:"Geist Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:"Geist Mono Variable", ui-monospace, "SFMono-Regular", Consolas, monospace;
+
+  --r-xs:4px; --r-sm:8px; --r-md:12px; --r-lg:16px; --r-full:999px;
+
+  --e1:inset 0 1px 0 rgba(255,255,255,.05), 0 1px 2px rgba(0,0,0,.60);
+  --e2:inset 0 1px 0 rgba(255,255,255,.07), 0 2px 8px rgba(0,0,0,.60),
+       0 12px 32px -12px rgba(0,0,0,.85);
+  --e3:inset 0 1px 0 rgba(255,255,255,.09), 0 24px 64px -16px rgba(0,0,0,.90);
+
+  --d-micro:90ms; --d-fast:140ms; --d-base:200ms; --d-slow:320ms; --d-hero:600ms;
+  --ease-out:cubic-bezier(.16,1,.3,1);
+  --ease-in-out:cubic-bezier(.65,0,.35,1);
+  --ease-exit:cubic-bezier(.4,0,1,1);
+  --ease-press:cubic-bezier(.2,.7,.2,1);
+
+  --perspective:1200px; --tilt-max:5deg;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+  min-height: 100vh;
+}
+
+.mono-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.depth {
+  transform-style: preserve-3d;
+  perspective: var(--perspective);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+
+/* 3D Keycap Tactile Physics & Spatial Relief */
+.keycap, .keycap-3d {
+  transform-style: preserve-3d;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 0 #181822, 0 4px 10px rgba(0, 0, 0, 0.55);
+  transition: transform 120ms var(--ease-press), box-shadow 120ms var(--ease-press), border-color 140ms ease;
+  will-change: transform, box-shadow;
+}
+.keycap:hover, .keycap-3d:hover {
+  transform: translateY(-2.5px) translateZ(8px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 4px 0 #181822, 0 12px 24px rgba(0, 0, 0, 0.7);
+}
+.keycap:active, .keycap-3d:active {
+  transform: translateY(2px) translateZ(-4px);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.45), 0 1px 0 #181822, 0 2px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* Dynamic Specular Spotlight Glare on 3D Surfaces */
+.card-glare {
+  position: relative;
+  overflow: hidden;
+  transform-style: preserve-3d;
+}
+.card-glare::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle 360px at var(--mx, 50%) var(--my, 50%), rgba(255, 255, 255, 0.05), transparent 70%);
+  opacity: 0;
+  transition: opacity 280ms ease;
+  border-radius: inherit;
+  z-index: 1;
+}
+.card-glare:hover::before {
+  opacity: 1;
+}
+
+/* 3D Spatial Entrance Animation */
+@keyframes enter3D {
+  0% {
+    opacity: 0;
+    transform: perspective(1200px) translateY(14px) scale(0.985) rotateX(2.5deg);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(1200px) translateY(0) scale(1) rotateX(0deg);
+  }
+}
+.animate-enter-3d {
+  animation: enter3D 320ms var(--ease-out) both;
+}
+
+/* Signature 3D Floating Pulse */
+@keyframes float3D {
+  0%, 100% {
+    transform: translateY(0px) rotateX(0deg);
+  }
+  50% {
+    transform: translateY(-3px) rotateX(1deg);
+  }
+}
+.animate-float-3d {
+  animation: float3D 4s ease-in-out infinite;
+}
+
+
+/* Signature Set Checked Pulse */
+@keyframes ringPulse {
+  0% {
+    box-shadow: 0 0 0 0px var(--accent), inset 0 0 0 1px var(--accent);
+    background-color: var(--accent-soft);
+  }
+  50% {
+    box-shadow: 0 0 0 3px rgba(200, 246, 92, 0.25), inset 0 0 0 1px var(--accent);
+  }
+  100% {
+    box-shadow: 0 0 0 0px rgba(200, 246, 92, 0), inset 0 0 0 0px transparent;
+    background-color: transparent;
+  }
+}
+.set-row-checked {
+  animation: ringPulse 420ms cubic-bezier(.16, 1, .3, 1) forwards;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: var(--r-full);
+}
+
+/* Print Stylesheet for Gym Bag Logs */
+@media print {
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  aside, nav, .no-print, [aria-hidden="true"] {
+    display: none !important;
+  }
+  .print-only {
+    display: block !important;
+  }
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border-color: #bbb !important;
+    background-color: transparent !important;
+    color: #111 !important;
+  }
+}
+
+.reduced-motion-forced *, .reduced-motion-forced *::before, .reduced-motion-forced *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  transform: none !important;
+}

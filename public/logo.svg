@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" fill="none">
+  <!-- Dark Monolithic Keycap Surface -->
+  <rect width="240" height="240" rx="52" fill="#08080A" stroke="#22222C" stroke-width="3"/>
+  <rect x="12" y="12" width="216" height="216" rx="42" fill="#101014" stroke="#1A1A22" stroke-width="1.5"/>
+  
+  <!-- Inset Top Light Highlight -->
+  <path d="M54 24H186" stroke="#2D2D3C" stroke-width="2" stroke-linecap="round"/>
+
+  <!-- Signature Spine Binding Line -->
+  <line x1="52" y1="42" x2="52" y2="198" stroke="#282836" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- Four Pillar Rivet Marks (Gym, Run, Study, Clean) -->
+  <circle cx="52" cy="58" r="8" fill="#C8F65C"/>
+  <circle cx="52" cy="100" r="6" fill="#68687A"/>
+  <circle cx="52" cy="142" r="6" fill="#68687A"/>
+  <circle cx="52" cy="184" r="6" fill="#68687A"/>
+
+  <!-- Precision Machined Geometric "K" -->
+  <path d="M102 62V178M102 120L168 62M120 104L174 178" stroke="#F4F4F6" stroke-width="14" stroke-linecap="square" stroke-linejoin="miter"/>
+
+  <!-- High-Precision Glowing Accent Dot -->
+  <circle cx="196" cy="168" r="12" fill="#C8F65C"/>
+  <circle cx="196" cy="168" r="18" fill="#C8F65C" fill-opacity="0.25"/>
+</svg>
