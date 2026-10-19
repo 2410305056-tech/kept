@@ -1,5 +1,5 @@
 // Kept Service Worker - Zero Network Offline Cache
-const CACHE_NAME = 'kept-v1.4-offline';
+const CACHE_NAME = 'kept-v1.5-offline';
 const PRECACHE_URLS = [
   './',
   './index.html',

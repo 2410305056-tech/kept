@@ -6,6 +6,8 @@ import {
   currentSession,
   requestCode,
   verifyCode,
+  signInWithPassword,
+  signUpWithPassword,
   signOutCloud,
   fetchCloudRow,
   pushCloudState,
@@ -37,6 +39,7 @@ export function CloudPanel() {
   const [row, setRow] = useState(null);
   const [stage, setStage] = useState("email"); // email | code | signedIn
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(isCloudConfigured());
@@ -136,6 +139,36 @@ export function CloudPanel() {
       window.removeEventListener("kept:cloud:auth", onAuth);
     };
   }, []);
+
+  const handlePassword = async (mode) => {
+    if (!email.trim() || !password) {
+      setError("Enter email and password.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      if (mode === "up") {
+        const result = await signUpWithPassword(email.trim(), password);
+        if (result.session) {
+          await completeSignIn(result.session);
+        } else {
+          showToast("Check your email to confirm, then sign in.");
+        }
+      } else {
+        const s = await signInWithPassword(email.trim(), password);
+        await completeSignIn(s);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const handleSendCode = async () => {
     if (!email.trim()) {
@@ -242,6 +275,7 @@ export function CloudPanel() {
       setRow(null);
       setStage("email");
       setCode("");
+      setPassword("");
       setShowPullConfirm(false);
       showToast("Signed out of cloud sync");
     } catch (err) {
@@ -286,28 +320,54 @@ export function CloudPanel() {
       {!session && !checking && (
         <div className="space-y-3">
           <p className="text-xs text-[var(--text-3)]">
-            Sign in with email. Open the link on this device, or paste the code
-            from the email if your template includes one.
+            Same email on laptop and phone. Password sign-in works without
+            waiting for a magic-link email.
           </p>
 
           {stage === "email" ? (
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="space-y-3">
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
                 autoComplete="email"
-                className="h-11 flex-1 px-3 bg-[var(--surface-1)] border border-[var(--line)] text-sm font-mono text-[var(--text-1)] rounded-[8px] outline-none focus:border-[var(--accent)]"
+                className="h-11 w-full px-3 bg-[var(--surface-1)] border border-[var(--line)] text-sm font-mono text-[var(--text-1)] rounded-[8px] outline-none focus:border-[var(--accent)]"
               />
-              <Button
-                variant="primary"
-                size="md"
-                onClick={handleSendCode}
-                disabled={busy}
-              >
-                {busy ? "Sending..." : "Send code"}
-              </Button>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="password (6+ characters)"
+                autoComplete="current-password"
+                className="h-11 w-full px-3 bg-[var(--surface-1)] border border-[var(--line)] text-sm font-mono text-[var(--text-1)] rounded-[8px] outline-none focus:border-[var(--accent)]"
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={() => handlePassword("in")}
+                  disabled={busy}
+                >
+                  {busy ? "Signing in..." : "Sign in"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onClick={() => handlePassword("up")}
+                  disabled={busy}
+                >
+                  Create account
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="md"
+                  onClick={handleSendCode}
+                  disabled={busy}
+                >
+                  Email link instead
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">

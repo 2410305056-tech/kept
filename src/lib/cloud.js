@@ -90,14 +90,21 @@ export async function currentSession() {
 
 function authParams() {
   const query = new URLSearchParams(window.location.search);
-  const raw = (window.location.hash || "").replace(/^#/, "");
+  let stored = "";
+  try {
+    stored = sessionStorage.getItem("kept.auth.hash") || "";
+    if (stored) sessionStorage.removeItem("kept.auth.hash");
+  } catch {
+    stored = "";
+  }
+  const raw = (stored || window.location.hash || "").replace(/^#/, "");
   const body = raw.startsWith("/") ? raw.slice(1).replace(/^\?/, "") : raw;
   const hash = new URLSearchParams(body.includes("=") ? body : "");
   return { query, hash };
 }
 
-// Magic-link tokens land in the URL hash. Consume them before HashRouter
-// treats the fragment as a route.
+// Magic-link tokens land in the URL hash. An inline script in index.html
+// stashes them before HashRouter can treat the fragment as a route.
 export async function consumeAuthRedirect() {
   if (!isCloudConfigured() || typeof window === "undefined") return null;
   const { query, hash } = authParams();
@@ -159,12 +166,41 @@ export async function verifyCode(email, token) {
   const { data, error } = await sb.auth.verifyOtp({
     email,
     token: token.trim(),
-    // Magic-link OTP. Default template is a link; dashboard should include {{ .Token }}.
     type: "email",
   });
   if (error) throw error;
   if (!data.session) throw new Error("Verification did not return a session.");
   return data.session;
+}
+
+export async function signInWithPassword(email, password) {
+  const sb = await client();
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  if (!data.session) throw new Error("Sign-in did not return a session.");
+  await linkIfNeeded();
+  window.dispatchEvent(new Event("kept:cloud:auth"));
+  return data.session;
+}
+
+export async function signUpWithPassword(email, password) {
+  const sb = await client();
+  const redirect =
+    typeof window !== "undefined"
+      ? `${window.location.origin}${import.meta.env.BASE_URL}`
+      : undefined;
+  const { data, error } = await sb.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: redirect },
+  });
+  if (error) throw error;
+  if (data.session) {
+    await linkIfNeeded();
+    window.dispatchEvent(new Event("kept:cloud:auth"));
+    return { session: data.session, needsConfirm: false };
+  }
+  return { session: null, needsConfirm: true };
 }
 
 export async function signOutCloud() {

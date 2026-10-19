@@ -15,6 +15,19 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     
     <title>Kept</title>
+    <script>
+      (function () {
+        var h = location.hash || "";
+        if (
+          h.indexOf("access_token=") !== -1 ||
+          h.indexOf("refresh_token=") !== -1 ||
+          h.indexOf("token_hash=") !== -1
+        ) {
+          try { sessionStorage.setItem("kept.auth.hash", h); } catch (e) {}
+          history.replaceState({}, "", location.pathname + location.search + "#/");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
