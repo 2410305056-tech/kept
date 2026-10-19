@@ -42,7 +42,14 @@ export function useCloudSync() {
         });
       } catch (err) {
         if (err.code === "conflict") {
-          writeCloudMeta({ ...meta, dirty: true, conflict: true });
+          let revision = meta.revision ?? 0;
+          try {
+            const row = await fetchCloudRow();
+            if (row) revision = Number(row.revision);
+          } catch {
+            /* keep local revision */
+          }
+          writeCloudMeta({ ...meta, revision, dirty: true, conflict: true });
         }
       }
     };
@@ -90,6 +97,11 @@ export function useCloudSync() {
     const onPullRequest = () => pull();
 
     pull();
+    const onAuth = () => {
+      window.dispatchEvent(new Event("kept:cloud:meta"));
+      pull();
+    };
+    window.addEventListener("kept:cloud:auth", onAuth);
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onOnline);
     window.addEventListener("kept:cloud:pull", onPullRequest);
@@ -97,6 +109,7 @@ export function useCloudSync() {
     return () => {
       unsubscribe();
       if (timer.current) clearTimeout(timer.current);
+      window.removeEventListener("kept:cloud:auth", onAuth);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("kept:cloud:pull", onPullRequest);

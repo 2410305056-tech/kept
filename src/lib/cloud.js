@@ -1,6 +1,6 @@
 // Optional Supabase sync. Nothing here runs unless both env vars exist.
-const URL = import.meta.env.VITE_SUPABASE_URL;
-const ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const META_KEY = "kept.cloud.v1";
 const CLIENT_KEY = "kept.clientId";
@@ -8,7 +8,7 @@ const CLIENT_KEY = "kept.clientId";
 let clientPromise = null;
 
 export function isCloudConfigured() {
-  return Boolean(URL && ANON);
+  return Boolean(SUPABASE_URL && SUPABASE_ANON);
 }
 
 export function readCloudMeta() {
@@ -51,12 +51,12 @@ async function client() {
   if (!isCloudConfigured()) throw new Error("Cloud sync is not configured.");
   if (!clientPromise) {
     clientPromise = import("@supabase/supabase-js").then(({ createClient }) =>
-      createClient(URL, ANON, {
+      createClient(SUPABASE_URL, SUPABASE_ANON, {
         auth: {
           persistSession: true,
           autoRefreshToken: true,
-          // HashRouter owns the URL hash, so use email codes instead of magic links.
           detectSessionInUrl: false,
+          flowType: "implicit",
         },
       })
     );
@@ -71,11 +71,56 @@ export async function currentSession() {
   return data.session ?? null;
 }
 
+// Magic-link tokens land in the URL hash. Consume them before HashRouter
+// treats the fragment as a route.
+export async function consumeAuthRedirect() {
+  if (!isCloudConfigured() || typeof window === "undefined") return null;
+  const query = new URLSearchParams(window.location.search);
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const accessToken = hash.get("access_token");
+  const refreshToken = hash.get("refresh_token");
+  const code = query.get("code");
+  const tokenHash = query.get("token_hash") || hash.get("token_hash");
+  if (!accessToken && !code && !tokenHash) return null;
+
+  const sb = await client();
+  let session = null;
+  if (accessToken && refreshToken) {
+    const { data, error } = await sb.auth.setSession({
+      access_token: accessToken,
+      refresh_token: refreshToken,
+    });
+    if (error) throw error;
+    session = data.session ?? null;
+  } else if (code) {
+    const { data, error } = await sb.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    session = data.session ?? null;
+  } else {
+    const { data, error } = await sb.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: query.get("type") || hash.get("type") || "email",
+    });
+    if (error) throw error;
+    session = data.session ?? null;
+  }
+
+  const url = new URL(window.location.href);
+  url.search = "";
+  window.history.replaceState({}, "", `${url.pathname}#/`);
+  window.dispatchEvent(new Event("kept:cloud:auth"));
+  return session;
+}
+
 export async function requestCode(email) {
   const sb = await client();
+  const redirect =
+    typeof window !== "undefined"
+      ? `${window.location.origin}${import.meta.env.BASE_URL}`
+      : undefined;
   const { error } = await sb.auth.signInWithOtp({
     email,
-    options: { shouldCreateUser: true },
+    options: { shouldCreateUser: true, emailRedirectTo: redirect },
   });
   if (error) throw error;
 }
@@ -85,6 +130,7 @@ export async function verifyCode(email, token) {
   const { data, error } = await sb.auth.verifyOtp({
     email,
     token: token.trim(),
+    // Magic-link OTP. Default template is a link; dashboard should include {{ .Token }}.
     type: "email",
   });
   if (error) throw error;

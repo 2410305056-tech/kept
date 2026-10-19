@@ -47,39 +47,7 @@ export function CloudPanel() {
   const [error, setError] = useState("");
   const [showPullConfirm, setShowPullConfirm] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-
-    (async () => {
-      if (!isCloudConfigured()) {
-        setChecking(false);
-        return;
-      }
-      try {
-        const s = await currentSession();
-        if (!alive) return;
-        if (s) {
-          setSession(s);
-          setStage("signedIn");
-          const r = await fetchCloudRow();
-          if (alive) setRow(r);
-        }
-      } catch (err) {
-        if (alive) setError(err.message || "Could not reach Supabase.");
-      } finally {
-        if (alive) setChecking(false);
-      }
-    })();
-
-    const onMeta = () => setMeta(readCloudMeta());
-    window.addEventListener("kept:cloud:meta", onMeta);
-    return () => {
-      alive = false;
-      window.removeEventListener("kept:cloud:meta", onMeta);
-    };
-  }, []);
-
-  const applyPull = (r, user = session?.user) => {
+  const applyPull = (r, user) => {
     replaceState(r.state);
     const next = {
       userId: user?.id,
@@ -96,34 +64,80 @@ export function CloudPanel() {
     setRow(r);
   };
 
-  const uploadLocal = async (baseRevision, user = session?.user) => {
-    setBusy(true);
-    setError("");
-    try {
-      const revision = await pushCloudState(
-        getState(),
-        baseRevision,
-        getClientId()
-      );
-      const next = {
-        userId: user?.id,
-        email: user?.email,
-        clientId: getClientId(),
-        revision,
-        linked: true,
-        dirty: false,
-        conflict: false,
-        lastSyncAt: new Date().toISOString(),
-      };
-      writeCloudMeta(next);
-      setMeta(next);
-      showToast("This device now syncs to the cloud");
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
+  const uploadLocal = async (baseRevision, user) => {
+    const revision = await pushCloudState(
+      getState(),
+      baseRevision,
+      getClientId()
+    );
+    const next = {
+      userId: user?.id,
+      email: user?.email,
+      clientId: getClientId(),
+      revision,
+      linked: true,
+      dirty: false,
+      conflict: false,
+      lastSyncAt: new Date().toISOString(),
+    };
+    writeCloudMeta(next);
+    setMeta(next);
+    showToast("This device now syncs to the cloud");
+  };
+
+  const completeSignIn = async (s) => {
+    setSession(s);
+    setStage("signedIn");
+    const r = await fetchCloudRow();
+    setRow(r);
+    if (readCloudMeta()?.linked) return;
+    if (!r) {
+      await uploadLocal(0, s.user);
+    } else if (emptyData(getState())) {
+      applyPull(r, s.user);
+      showToast("Cloud data restored to this device");
+    } else {
+      showToast("Signed in. Choose which copy to keep below.");
     }
   };
+
+  useEffect(() => {
+    let alive = true;
+
+    (async () => {
+      if (!isCloudConfigured()) {
+        setChecking(false);
+        return;
+      }
+      try {
+        const s = await currentSession();
+        if (!alive) return;
+        if (s) await completeSignIn(s);
+      } catch (err) {
+        if (alive) setError(err.message || "Could not reach the cloud.");
+      } finally {
+        if (alive) setChecking(false);
+      }
+    })();
+
+    const onMeta = () => setMeta(readCloudMeta());
+    const onAuth = async () => {
+      try {
+        const s = await currentSession();
+        if (!alive || !s) return;
+        await completeSignIn(s);
+      } catch (err) {
+        if (alive) setError(err.message);
+      }
+    };
+    window.addEventListener("kept:cloud:meta", onMeta);
+    window.addEventListener("kept:cloud:auth", onAuth);
+    return () => {
+      alive = false;
+      window.removeEventListener("kept:cloud:meta", onMeta);
+      window.removeEventListener("kept:cloud:auth", onAuth);
+    };
+  }, []);
 
   const handleSendCode = async () => {
     if (!email.trim()) {
@@ -135,7 +149,7 @@ export function CloudPanel() {
     try {
       await requestCode(email.trim());
       setStage("code");
-      showToast("Code sent. Check your email.");
+      showToast("Check your email for the sign-in link.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -145,25 +159,14 @@ export function CloudPanel() {
 
   const handleVerify = async () => {
     if (!code.trim()) {
-      setError("Enter the 6-digit code.");
+      setError("Enter the code from the email.");
       return;
     }
     setBusy(true);
     setError("");
     try {
       const s = await verifyCode(email.trim(), code);
-      setSession(s);
-      setStage("signedIn");
-      const r = await fetchCloudRow();
-      setRow(r);
-      if (!r) {
-        await uploadLocal(0, s.user);
-      } else if (emptyData(getState())) {
-        applyPull(r, s.user);
-        showToast("Cloud data restored to this device");
-      } else {
-        showToast("Signed in. Choose which copy to keep below.");
-      }
+      await completeSignIn(s);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -177,9 +180,14 @@ export function CloudPanel() {
     setError("");
     try {
       if (meta.dirty || meta.conflict) {
+        let base = meta.revision ?? 0;
+        if (meta.conflict) {
+          const latest = await fetchCloudRow();
+          if (latest) base = Number(latest.revision);
+        }
         const revision = await pushCloudState(
           getState(),
-          meta.revision ?? 0,
+          base,
           getClientId()
         );
         const next = {
@@ -195,7 +203,7 @@ export function CloudPanel() {
       } else {
         const r = await fetchCloudRow();
         if (r && Number(r.revision) > Number(meta.revision ?? 0)) {
-          applyPull(r);
+          applyPull(r, session?.user);
           showToast("Pulled the latest cloud data");
         } else {
           showToast("Already up to date");
@@ -217,7 +225,7 @@ export function CloudPanel() {
         showToast("No cloud data yet");
         return;
       }
-      applyPull(r);
+      applyPull(r, session?.user);
       showToast("Cloud data restored to this device");
     } catch (err) {
       setError(err.message);
@@ -256,8 +264,8 @@ export function CloudPanel() {
         </div>
         <p className="text-xs text-[var(--text-3)] leading-relaxed">
           Not configured. Set <code>VITE_SUPABASE_URL</code> and{" "}
-          <code>VITE_SUPABASE_ANON_KEY</code> at build time, then run{" "}
-          <code>supabase/schema.sql</code>. Until then the app stays fully local.
+          <code>VITE_SUPABASE_ANON_KEY</code> at build time. Until then the app
+          stays fully local.
         </p>
       </Card>
     );
@@ -280,7 +288,8 @@ export function CloudPanel() {
       {!session && !checking && (
         <div className="space-y-3">
           <p className="text-xs text-[var(--text-3)]">
-            Sign in with email. You will receive a 6-digit code; there is no password.
+            Sign in with email. Open the link on this device, or paste the code
+            from the email if your template includes one.
           </p>
 
           {stage === "email" ? (
@@ -308,7 +317,7 @@ export function CloudPanel() {
                 <input
                   type="text"
                   inputMode="numeric"
-                  maxLength={6}
+                  maxLength={8}
                   value={code}
                   onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
                   placeholder="123456"
@@ -365,7 +374,17 @@ export function CloudPanel() {
                   <Button
                     variant="ghost"
                     size="md"
-                    onClick={() => uploadLocal(row.revision)}
+                    onClick={async () => {
+                      setBusy(true);
+                      setError("");
+                      try {
+                        await uploadLocal(row.revision, session?.user);
+                      } catch (err) {
+                        setError(err.message);
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
                     disabled={busy}
                   >
                     Upload this device
@@ -380,7 +399,17 @@ export function CloudPanel() {
                 <Button
                   variant="primary"
                   size="md"
-                  onClick={() => uploadLocal(0)}
+                  onClick={async () => {
+                    setBusy(true);
+                    setError("");
+                    try {
+                      await uploadLocal(0, session?.user);
+                    } catch (err) {
+                      setError(err.message);
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
                   disabled={busy}
                 >
                   Upload this device
@@ -444,7 +473,7 @@ export function CloudPanel() {
                     setShowPullConfirm(false);
                     if (linked) handleForcePull();
                     else {
-                      applyPull(row);
+                      applyPull(row, session?.user);
                       showToast("Cloud data restored to this device");
                     }
                   }}

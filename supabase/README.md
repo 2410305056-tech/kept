@@ -41,8 +41,10 @@ sure the body includes `{{ .Token }}`, for example:
 <p style="font-size:24px;letter-spacing:6px">{{ .Token }}</p>
 ```
 
-Without that line the Verify step has nothing to check. You can keep the magic
-link in the same email if you want; the app only uses the code.
+Free-tier projects using the default mailer **cannot** change this template.
+The app therefore also accepts the default magic link: open it on the same
+device you want to sign in. If you later add custom SMTP, include `{{ .Token }}`
+and the in-app code field will work too.
 
 ## 4. Build with the keys
 
