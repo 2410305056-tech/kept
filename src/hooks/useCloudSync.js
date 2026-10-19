@@ -7,6 +7,7 @@ import {
   pushCloudState,
   readCloudMeta,
   writeCloudMeta,
+  linkIfNeeded,
 } from "../lib/cloud.js";
 
 // Background sync: pull when this device has no pending edits, push 1.2 s after
@@ -96,10 +97,18 @@ export function useCloudSync() {
     const onOnline = () => push();
     const onPullRequest = () => pull();
 
-    pull();
+    const boot = async () => {
+      try {
+        await linkIfNeeded();
+      } catch {
+        /* stay local until the next attempt */
+      }
+      await pull();
+    };
+    boot();
     const onAuth = () => {
       window.dispatchEvent(new Event("kept:cloud:meta"));
-      pull();
+      boot();
     };
     window.addEventListener("kept:cloud:auth", onAuth);
     document.addEventListener("visibilitychange", onVisible);

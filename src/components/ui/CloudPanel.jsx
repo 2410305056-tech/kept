@@ -12,15 +12,11 @@ import {
   readCloudMeta,
   writeCloudMeta,
   getClientId,
+  linkIfNeeded,
 } from "../../lib/cloud.js";
 import { ToastContext } from "../../context/ToastContext.js";
 import { Card } from "./Card.jsx";
 import { Button } from "./Button.jsx";
-
-const emptyData = (s) =>
-  ["sessions", "bodyLogs", "fuelLogs", "studySessions", "cleanLog", "runs", "fees"].every(
-    (k) => !s?.[k]?.length
-  );
 
 const summary = (s) =>
   [
@@ -88,17 +84,19 @@ export function CloudPanel() {
   const completeSignIn = async (s) => {
     setSession(s);
     setStage("signedIn");
-    const r = await fetchCloudRow();
-    setRow(r);
-    if (readCloudMeta()?.linked) return;
-    if (!r) {
-      await uploadLocal(0, s.user);
-    } else if (emptyData(getState())) {
-      applyPull(r, s.user);
-      showToast("Cloud data restored to this device");
-    } else {
-      showToast("Signed in. Choose which copy to keep below.");
+    const result = await linkIfNeeded();
+    setMeta(readCloudMeta());
+    if (result.row) setRow(result.row);
+    else {
+      try {
+        setRow(await fetchCloudRow());
+      } catch {
+        setRow(null);
+      }
     }
+    if (result.action === "upload") showToast("This device now syncs to the cloud");
+    else if (result.action === "pull") showToast("Cloud data restored to this device");
+    else if (result.action === "choose") showToast("Signed in. Choose which copy to keep below.");
   };
 
   useEffect(() => {

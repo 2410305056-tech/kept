@@ -1,11 +1,28 @@
+import { getState, replaceState } from "./store.js";
+
 // Optional Supabase sync. Nothing here runs unless both env vars exist.
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+const EMPTY_KEYS = [
+  "sessions",
+  "bodyLogs",
+  "fuelLogs",
+  "studySessions",
+  "cleanLog",
+  "runs",
+  "fees",
+];
+
+function emptyData(s) {
+  return EMPTY_KEYS.every((k) => !s?.[k]?.length);
+}
 
 const META_KEY = "kept.cloud.v1";
 const CLIENT_KEY = "kept.clientId";
 
 let clientPromise = null;
+let linkPromise = null;
 
 export function isCloudConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON);
@@ -71,15 +88,22 @@ export async function currentSession() {
   return data.session ?? null;
 }
 
+function authParams() {
+  const query = new URLSearchParams(window.location.search);
+  const raw = (window.location.hash || "").replace(/^#/, "");
+  const body = raw.startsWith("/") ? raw.slice(1).replace(/^\?/, "") : raw;
+  const hash = new URLSearchParams(body.includes("=") ? body : "");
+  return { query, hash };
+}
+
 // Magic-link tokens land in the URL hash. Consume them before HashRouter
 // treats the fragment as a route.
 export async function consumeAuthRedirect() {
   if (!isCloudConfigured() || typeof window === "undefined") return null;
-  const query = new URLSearchParams(window.location.search);
-  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const accessToken = hash.get("access_token");
-  const refreshToken = hash.get("refresh_token");
-  const code = query.get("code");
+  const { query, hash } = authParams();
+  const accessToken = hash.get("access_token") || query.get("access_token");
+  const refreshToken = hash.get("refresh_token") || query.get("refresh_token");
+  const code = query.get("code") || hash.get("code");
   const tokenHash = query.get("token_hash") || hash.get("token_hash");
   if (!accessToken && !code && !tokenHash) return null;
 
@@ -108,6 +132,11 @@ export async function consumeAuthRedirect() {
   const url = new URL(window.location.href);
   url.search = "";
   window.history.replaceState({}, "", `${url.pathname}#/`);
+  try {
+    await linkIfNeeded();
+  } catch (err) {
+    console.warn("Cloud link after sign-in failed:", err);
+  }
   window.dispatchEvent(new Event("kept:cloud:auth"));
   return session;
 }
@@ -179,4 +208,48 @@ export async function pushCloudState(state, baseRevision = 0, clientId = null) {
     throw err;
   }
   return Number(data);
+}
+
+function writeLinkedMeta(user, revision) {
+  const next = {
+    userId: user?.id,
+    email: user?.email,
+    clientId: getClientId(),
+    revision: Number(revision) || 0,
+    linked: true,
+    dirty: false,
+    conflict: false,
+    lastSyncAt: new Date().toISOString(),
+  };
+  writeCloudMeta(next);
+  return next;
+}
+
+// After a session exists, attach this device. Safe to call from any page —
+// background sync is gated on meta.linked, not on visiting Progress.
+export async function linkIfNeeded() {
+  if (linkPromise) return linkPromise;
+  linkPromise = (async () => {
+    const session = await currentSession();
+    if (!session) return { session: null, linked: false };
+    if (readCloudMeta()?.linked) return { session, linked: true, action: "already" };
+
+    const row = await fetchCloudRow();
+    if (!row) {
+      const revision = await pushCloudState(getState(), 0, getClientId());
+      writeLinkedMeta(session.user, revision);
+      return { session, linked: true, action: "upload" };
+    }
+
+    if (emptyData(getState())) {
+      replaceState(row.state);
+      writeLinkedMeta(session.user, row.revision);
+      return { session, linked: true, action: "pull", row };
+    }
+
+    return { session, linked: false, action: "choose", row };
+  })().finally(() => {
+    linkPromise = null;
+  });
+  return linkPromise;
 }
