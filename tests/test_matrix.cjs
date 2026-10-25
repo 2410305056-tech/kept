@@ -6,6 +6,7 @@ async function runTests() {
   const { createInitialState } = await import('../src/lib/seed.js');
   const { key, parse, addDays, diffDays } = await import('../src/lib/dates.js');
   const { validateImportData } = await import('../src/lib/exportImport.js');
+  const { mergeLedgers, emptyLedger, isLedgerState } = await import('../src/lib/syncMerge.js');
 
   console.log("=== RUNNING KEPT VERIFICATION TEST MATRIX ===");
 
@@ -233,6 +234,18 @@ async function runTests() {
   const partialVol = validDoneSets.reduce((acc, s) => acc + s.weightKg * s.reps, 0);
   assert.strictEqual(partialVol, 200, "Volume must only include done sets with reps > 0");
   console.log("✓ Test 15 Passed: Partial sets with 0 reps are excluded from completed count and volume");
+
+  assert.strictEqual(emptyLedger(state), true, "Seed ledger has empty logs");
+  assert.strictEqual(isLedgerState(state), true, "Seed is a valid ledger");
+  const phoneA = { ...state, sessions: [{ id: "a1", date: "2026-10-20", dayName: "Push A" }] };
+  const phoneB = { ...state, sessions: [{ id: "b1", date: "2026-10-21", dayName: "Pull A" }], runs: [{ date: "2026-10-21", km: 3 }] };
+  const merged = mergeLedgers(phoneA, phoneB);
+  assert.strictEqual(merged.sessions.length, 2, "Merge keeps sessions from both phones");
+  assert.strictEqual(merged.runs.length, 1, "Merge keeps runs from the other phone");
+  const dup = mergeLedgers(phoneA, phoneA);
+  assert.strictEqual(dup.sessions.length, 1, "Merge does not duplicate the same session id");
+  console.log("✓ Test 16 Passed: Cloud merge unions logs across phones without duplicates");
+
 
   console.log("\n==============================================");
   console.log("ALL LOGIC AND TEST MATRIX CHECKS PASSED (100%)");

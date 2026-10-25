@@ -11,7 +11,10 @@ finish provisioning.
 ## 2. Create the schema
 
 Open **SQL Editor → New query**, paste the contents of
-[`schema.sql`](./schema.sql), and run it once.
+[`schema.sql`](./schema.sql), and run it. Safe to re-run.
+
+If sign-in works but sync fails with **permission denied for table kept_state**,
+the table existed without grants to `authenticated`. Re-run `schema.sql`.
 
 This creates:
 

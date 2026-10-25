@@ -14,6 +14,11 @@ create table if not exists public.kept_state (
 
 alter table public.kept_state enable row level security;
 
+-- RLS policies do nothing without table grants. Without these, signed-in
+-- clients get "permission denied for table kept_state" (42501).
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.kept_state to authenticated;
+
 drop policy if exists kept_state_select_own on public.kept_state;
 drop policy if exists kept_state_insert_own on public.kept_state;
 drop policy if exists kept_state_update_own on public.kept_state;
@@ -80,6 +85,7 @@ end;
 $$;
 
 revoke all on function public.push_kept_state(jsonb, bigint, text) from public;
+revoke all on function public.push_kept_state(jsonb, bigint, text) from anon;
 grant execute on function public.push_kept_state(jsonb, bigint, text) to authenticated;
 
 -- Read-only views. The JSONB row stays the single source of truth; these
@@ -172,3 +178,79 @@ from public.kept_state k
 cross join lateral jsonb_array_elements(
   coalesce(k.state->'fees', '[]'::jsonb)
 ) s;
+
+grant select on public.kept_sessions to authenticated;
+grant select on public.kept_body_logs to authenticated;
+grant select on public.kept_study_sessions to authenticated;
+grant select on public.kept_clean_log to authenticated;
+grant select on public.kept_runs to authenticated;
+grant select on public.kept_fees to authenticated;
+
+-- Shared phone-to-phone ledger (no sign-in). One JSON document for the whole site.
+create table if not exists public.kept_ledger (
+  id         text primary key default 'kept',
+  state      jsonb not null,
+  revision   bigint not null default 1,
+  client_id  text,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.kept_ledger enable row level security;
+
+drop policy if exists kept_ledger_public on public.kept_ledger;
+create policy kept_ledger_public on public.kept_ledger
+  for all using (true) with check (true);
+
+grant select, insert, update on table public.kept_ledger to anon, authenticated;
+
+create or replace function public.push_kept_ledger(
+  p_id text,
+  p_state jsonb,
+  p_base_revision bigint,
+  p_client_id text default null
+)
+returns bigint
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_rev bigint;
+begin
+  select revision into v_rev
+    from public.kept_ledger
+   where id = p_id
+   for update;
+
+  if not found then
+    begin
+      insert into public.kept_ledger (id, state, revision, client_id)
+      values (p_id, p_state, 1, p_client_id)
+      returning revision into v_rev;
+      return v_rev;
+    exception when unique_violation then
+      select revision into v_rev
+        from public.kept_ledger
+       where id = p_id
+       for update;
+    end;
+  end if;
+
+  if p_base_revision is distinct from v_rev then
+    raise exception 'revision_conflict' using errcode = '40001';
+  end if;
+
+  update public.kept_ledger
+     set state = p_state,
+         revision = v_rev + 1,
+         updated_at = now(),
+         client_id = p_client_id
+   where id = p_id
+   returning revision into v_rev;
+
+  return v_rev;
+end;
+$$;
+
+revoke all on function public.push_kept_ledger(text, jsonb, bigint, text) from public;
+grant execute on function public.push_kept_ledger(text, jsonb, bigint, text) to anon, authenticated;

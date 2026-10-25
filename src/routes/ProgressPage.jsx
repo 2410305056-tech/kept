@@ -12,7 +12,6 @@ import { Checkbox } from "../components/ui/Checkbox.jsx";
 import { BarChart } from "../components/charts/BarChart.jsx";
 import { Heatmap } from "../components/charts/Heatmap.jsx";
 import { PanelBoundary } from "../components/ui/ErrorBoundary.jsx";
-import { CloudPanel } from "../components/ui/CloudPanel.jsx";
 import { ToastContext } from "../context/ToastContext.js";
 
 export function ProgressPage() {
@@ -476,8 +475,6 @@ ${state.studySessions?.slice(-10)?.reverse()?.map((s) => `- **${s.date}**: ${s.m
           </div>
         )}
 
-        {/* Cloud Sync */}
-        <CloudPanel />
 
         {/* Clear Data (Type CLEAR) */}
         <div className="p-4 bg-[var(--surface-2)] rounded-[8px] border border-[var(--line)] space-y-3">

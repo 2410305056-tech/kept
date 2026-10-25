@@ -1,28 +1,21 @@
-import { getState, replaceState } from "./store.js";
+import { getState, replaceState, flush, subscribe } from "./store.js";
+import { emptyLedger, isLedgerState, mergeLedgers } from "./syncMerge.js";
 
-// Optional Supabase sync. Nothing here runs unless both env vars exist.
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
-const EMPTY_KEYS = [
-  "sessions",
-  "bodyLogs",
-  "fuelLogs",
-  "studySessions",
-  "cleanLog",
-  "runs",
-  "fees",
-];
-
-function emptyData(s) {
-  return EMPTY_KEYS.every((k) => !s?.[k]?.length);
-}
-
+const LEDGER_ID = "kept";
 const META_KEY = "kept.cloud.v1";
 const CLIENT_KEY = "kept.clientId";
+const PUSH_DELAY_MS = 800;
+const PULL_MS = 12000;
+const MAX_RETRIES = 5;
 
 let clientPromise = null;
-let linkPromise = null;
+let applyingRemote = false;
+let queue = Promise.resolve();
+let pushTimer = null;
+let pullTimer = null;
+let started = false;
 
 export function isCloudConfigured() {
   return Boolean(SUPABASE_URL && SUPABASE_ANON);
@@ -64,228 +57,285 @@ export function getClientId() {
   }
 }
 
+function patchMeta(partial) {
+  const prev = readCloudMeta() || {
+    userId: LEDGER_ID,
+    clientId: getClientId(),
+    revision: 0,
+    linked: true,
+    dirty: false,
+    conflict: false,
+  };
+  const next = { ...prev, ...partial, linked: true, clientId: prev.clientId || getClientId() };
+  writeCloudMeta(next);
+  return next;
+}
+
 async function client() {
   if (!isCloudConfigured()) throw new Error("Cloud sync is not configured.");
   if (!clientPromise) {
     clientPromise = import("@supabase/supabase-js").then(({ createClient }) =>
       createClient(SUPABASE_URL, SUPABASE_ANON, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: false,
-          flowType: "implicit",
-        },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       })
     );
   }
   return clientPromise;
 }
 
+function isConflict(error) {
+  const code = error?.code;
+  const msg = String(error?.message || "");
+  return (
+    code === "40001" ||
+    code === "PGRST301" ||
+    /revision_conflict|serialization|could not serialize/i.test(msg)
+  );
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 export async function currentSession() {
   if (!isCloudConfigured()) return null;
-  const sb = await client();
-  const { data } = await sb.auth.getSession();
-  return data.session ?? null;
+  return { user: { id: LEDGER_ID, email: null } };
 }
 
-function authParams() {
-  const query = new URLSearchParams(window.location.search);
-  let stored = "";
-  try {
-    stored = sessionStorage.getItem("kept.auth.hash") || "";
-    if (stored) sessionStorage.removeItem("kept.auth.hash");
-  } catch {
-    stored = "";
-  }
-  const raw = (stored || window.location.hash || "").replace(/^#/, "");
-  const body = raw.startsWith("/") ? raw.slice(1).replace(/^\?/, "") : raw;
-  const hash = new URLSearchParams(body.includes("=") ? body : "");
-  return { query, hash };
-}
-
-// Magic-link tokens land in the URL hash. An inline script in index.html
-// stashes them before HashRouter can treat the fragment as a route.
 export async function consumeAuthRedirect() {
-  if (!isCloudConfigured() || typeof window === "undefined") return null;
-  const { query, hash } = authParams();
-  const accessToken = hash.get("access_token") || query.get("access_token");
-  const refreshToken = hash.get("refresh_token") || query.get("refresh_token");
-  const code = query.get("code") || hash.get("code");
-  const tokenHash = query.get("token_hash") || hash.get("token_hash");
-  if (!accessToken && !code && !tokenHash) return null;
-
-  const sb = await client();
-  let session = null;
-  if (accessToken && refreshToken) {
-    const { data, error } = await sb.auth.setSession({
-      access_token: accessToken,
-      refresh_token: refreshToken,
-    });
-    if (error) throw error;
-    session = data.session ?? null;
-  } else if (code) {
-    const { data, error } = await sb.auth.exchangeCodeForSession(code);
-    if (error) throw error;
-    session = data.session ?? null;
-  } else {
-    const { data, error } = await sb.auth.verifyOtp({
-      token_hash: tokenHash,
-      type: query.get("type") || hash.get("type") || "email",
-    });
-    if (error) throw error;
-    session = data.session ?? null;
-  }
-
-  const url = new URL(window.location.href);
-  url.search = "";
-  window.history.replaceState({}, "", `${url.pathname}#/`);
-  try {
-    await linkIfNeeded();
-  } catch (err) {
-    console.warn("Cloud link after sign-in failed:", err);
-  }
-  window.dispatchEvent(new Event("kept:cloud:auth"));
-  return session;
+  return null;
 }
 
-export async function requestCode(email) {
-  const sb = await client();
-  const redirect =
-    typeof window !== "undefined"
-      ? `${window.location.origin}${import.meta.env.BASE_URL}`
-      : undefined;
-  const { error } = await sb.auth.signInWithOtp({
-    email,
-    options: { shouldCreateUser: true, emailRedirectTo: redirect },
-  });
-  if (error) throw error;
+export async function requestCode() {}
+export async function verifyCode() {
+  throw new Error("Sign-in is disabled. Data syncs automatically.");
 }
-
-export async function verifyCode(email, token) {
-  const sb = await client();
-  const { data, error } = await sb.auth.verifyOtp({
-    email,
-    token: token.trim(),
-    type: "email",
-  });
-  if (error) throw error;
-  if (!data.session) throw new Error("Verification did not return a session.");
-  return data.session;
+export async function signInWithPassword() {
+  throw new Error("Sign-in is disabled. Data syncs automatically.");
 }
-
-export async function signInWithPassword(email, password) {
-  const sb = await client();
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-  if (error) throw error;
-  if (!data.session) throw new Error("Sign-in did not return a session.");
-  await linkIfNeeded();
-  window.dispatchEvent(new Event("kept:cloud:auth"));
-  return data.session;
+export async function signUpWithPassword() {
+  throw new Error("Sign-in is disabled. Data syncs automatically.");
 }
-
-export async function signUpWithPassword(email, password) {
-  const sb = await client();
-  const redirect =
-    typeof window !== "undefined"
-      ? `${window.location.origin}${import.meta.env.BASE_URL}`
-      : undefined;
-  const { data, error } = await sb.auth.signUp({
-    email,
-    password,
-    options: { emailRedirectTo: redirect },
-  });
-  if (error) throw error;
-  if (data.session) {
-    await linkIfNeeded();
-    window.dispatchEvent(new Event("kept:cloud:auth"));
-    return { session: data.session, needsConfirm: false };
-  }
-  return { session: null, needsConfirm: true };
-}
-
 export async function signOutCloud() {
-  const sb = await client();
-  await sb.auth.signOut();
   writeCloudMeta(null);
 }
 
 export async function fetchCloudRow() {
   const sb = await client();
-  const {
-    data: { session },
-  } = await sb.auth.getSession();
-  if (!session) throw new Error("Not signed in.");
-
   const { data, error } = await sb
-    .from("kept_state")
+    .from("kept_ledger")
     .select("state, revision, updated_at")
-    .eq("user_id", session.user.id)
+    .eq("id", LEDGER_ID)
     .maybeSingle();
   if (error) throw error;
   return data;
 }
 
-// Atomic compare-and-set in Postgres. A stale base revision raises 40001.
 export async function pushCloudState(state, baseRevision = 0, clientId = null) {
+  if (!isLedgerState(state)) {
+    const err = new Error("Local state is not a valid ledger.");
+    err.code = "invalid_state";
+    throw err;
+  }
   const sb = await client();
-  const { data, error } = await sb.rpc("push_kept_state", {
+  const { data, error } = await sb.rpc("push_kept_ledger", {
+    p_id: LEDGER_ID,
     p_state: state,
-    p_base_revision: baseRevision ?? 0,
-    p_client_id: clientId,
+    p_base_revision: Number(baseRevision) || 0,
+    p_client_id: clientId || getClientId(),
   });
-
   if (error) {
-    const conflict =
-      error.code === "40001" || /revision_conflict/i.test(error.message || "");
-    const err = new Error(
-      conflict ? "Cloud data changed on another device." : error.message
-    );
-    err.code = conflict ? "conflict" : "push_failed";
+    const err = new Error(isConflict(error) ? "Cloud data changed on another device." : error.message);
+    err.code = isConflict(error) ? "conflict" : "push_failed";
     throw err;
   }
   return Number(data);
 }
 
-function writeLinkedMeta(user, revision) {
-  const next = {
-    userId: user?.id,
-    email: user?.email,
-    clientId: getClientId(),
+function applyRemote(state, revision) {
+  if (!isLedgerState(state)) return false;
+  applyingRemote = true;
+  try {
+    replaceState(state);
+  } finally {
+    applyingRemote = false;
+  }
+  patchMeta({
     revision: Number(revision) || 0,
-    linked: true,
     dirty: false,
     conflict: false,
     lastSyncAt: new Date().toISOString(),
-  };
-  writeCloudMeta(next);
-  return next;
+    lastError: null,
+  });
+  return true;
 }
 
-// After a session exists, attach this device. Safe to call from any page —
-// background sync is gated on meta.linked, not on visiting Progress.
+function enqueue(task) {
+  const run = queue.then(task, task);
+  queue = run.then(
+    () => {},
+    () => {}
+  );
+  return run;
+}
+
+async function pushWithRetry() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  flush();
+  let base = Number(readCloudMeta()?.revision) || 0;
+  let payload = getState();
+
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const revision = await pushCloudState(payload, base, getClientId());
+      patchMeta({
+        revision,
+        dirty: false,
+        conflict: false,
+        lastSyncAt: new Date().toISOString(),
+        lastError: null,
+      });
+      return revision;
+    } catch (err) {
+      if (err.code === "conflict") {
+        const row = await fetchCloudRow();
+        if (!row) {
+          base = 0;
+          continue;
+        }
+        payload = mergeLedgers(getState(), row.state);
+        if (isLedgerState(payload) && payload !== getState()) {
+          applyingRemote = true;
+          try {
+            replaceState(payload);
+          } finally {
+            applyingRemote = false;
+          }
+        }
+        base = Number(row.revision) || 0;
+        continue;
+      }
+      patchMeta({ lastError: err.message, conflict: false });
+      await sleep(300 * 2 ** attempt);
+    }
+  }
+}
+
+async function pullIfClean() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  const meta = readCloudMeta();
+  if (meta?.dirty) return;
+  const row = await fetchCloudRow();
+  if (!row || !isLedgerState(row.state)) return;
+  if (Number(row.revision) <= Number(meta?.revision ?? 0)) return;
+  applyRemote(row.state, row.revision);
+}
+
+async function bootstrap() {
+  const row = await fetchCloudRow();
+  const local = getState();
+  const meta = readCloudMeta();
+
+  if (!row) {
+    await pushWithRetry();
+    if (!readCloudMeta()?.linked) patchMeta({ revision: 1, dirty: false });
+    return;
+  }
+
+  if (!isLedgerState(row.state)) {
+    await pushWithRetry();
+    return;
+  }
+
+  if (emptyLedger(local) && !emptyLedger(row.state)) {
+    applyRemote(row.state, row.revision);
+    return;
+  }
+
+  if (emptyLedger(row.state) && !emptyLedger(local)) {
+    patchMeta({ revision: Number(row.revision) || 0, dirty: true });
+    await pushWithRetry();
+    return;
+  }
+
+  if (meta?.dirty) {
+    patchMeta({ revision: Number(row.revision) || meta.revision || 0, dirty: true });
+    const merged = mergeLedgers(local, row.state);
+    applyingRemote = true;
+    try {
+      replaceState(merged);
+    } finally {
+      applyingRemote = false;
+    }
+    await pushWithRetry();
+    return;
+  }
+
+  if (Number(row.revision) >= Number(meta?.revision ?? 0)) {
+    applyRemote(row.state, row.revision);
+  } else {
+    patchMeta({ revision: Number(meta?.revision) || 0, dirty: true });
+    await pushWithRetry();
+  }
+}
+
 export async function linkIfNeeded() {
-  if (linkPromise) return linkPromise;
-  linkPromise = (async () => {
-    const session = await currentSession();
-    if (!session) return { session: null, linked: false };
-    if (readCloudMeta()?.linked) return { session, linked: true, action: "already" };
+  return enqueue(bootstrap);
+}
 
-    const row = await fetchCloudRow();
-    if (!row) {
-      const revision = await pushCloudState(getState(), 0, getClientId());
-      writeLinkedMeta(session.user, revision);
-      return { session, linked: true, action: "upload" };
-    }
+function schedulePush() {
+  if (pushTimer) clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => {
+    pushTimer = null;
+    enqueue(pushWithRetry);
+  }, PUSH_DELAY_MS);
+}
 
-    if (emptyData(getState())) {
-      replaceState(row.state);
-      writeLinkedMeta(session.user, row.revision);
-      return { session, linked: true, action: "pull", row };
-    }
+export function startCloudSync() {
+  if (!isCloudConfigured() || started || typeof window === "undefined") {
+    return () => {};
+  }
+  started = true;
 
-    return { session, linked: false, action: "choose", row };
-  })().finally(() => {
-    linkPromise = null;
+  const unsub = subscribe(() => {
+    if (applyingRemote) return;
+    patchMeta({ dirty: true });
+    schedulePush();
   });
-  return linkPromise;
+
+  const onVisible = () => {
+    if (document.visibilityState === "visible") enqueue(pullIfClean);
+  };
+  const flushPush = () => {
+    flush();
+    enqueue(pushWithRetry);
+  };
+  const onHidden = () => {
+    if (document.visibilityState === "hidden") flushPush();
+  };
+  const onOnline = () => enqueue(async () => {
+    await bootstrap();
+  });
+
+  document.addEventListener("visibilitychange", onVisible);
+  document.addEventListener("visibilitychange", onHidden);
+  window.addEventListener("online", onOnline);
+  window.addEventListener("pagehide", flushPush);
+
+  pullTimer = setInterval(() => {
+    if (document.visibilityState === "visible") enqueue(pullIfClean);
+  }, PULL_MS);
+
+  enqueue(bootstrap);
+
+  return () => {
+    started = false;
+    unsub();
+    if (pushTimer) clearTimeout(pushTimer);
+    if (pullTimer) clearInterval(pullTimer);
+    document.removeEventListener("visibilitychange", onVisible);
+    document.removeEventListener("visibilitychange", onHidden);
+    window.removeEventListener("online", onOnline);
+    window.removeEventListener("pagehide", flushPush);
+  };
 }
