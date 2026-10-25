@@ -8,11 +8,12 @@ Read in this order, fully, before writing code:
 
 Do not build from memory of similar apps. Build from these three files.
 
-> **Post-build status — 19 Oct 2026.** The app is built and committed. `npm test` covers logic
+> **Post-build status — 26 Oct 2026.** The app is built, committed, and live on GitHub Pages.
+> `npm test` covers logic
 > checks 1, 2, 2b, 2d, 2e, 2c, 4, 4b, 5, 8, 9, 10, and 15. `npm run build` succeeds. The 130 KB
 > gzip budget is **not** met (~175 KB initial JS); the Supabase SDK is a separate lazy chunk.
 > Cloud sync is optional — see `supabase/README.md`. UI checks 3, 6, 7, 11–14 still need a real
-> browser/phone pass.
+> live Pages build (not a blocking phone QA gate).
 
 ---
 

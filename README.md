@@ -1,10 +1,13 @@
-# Kept — Private Training Ledger & Four Promises
+# Kept — Training Ledger & Four Promises
 
-Kept is a private, single-user training ledger designed to execute a structured 12-week muscle-building plan and track four core promises: **Gym, Running, Study, and Clean Living**.
+Kept is a **local-first, single-user** training ledger for a structured 12-week muscle-building plan and four promises: **Gym, Running, Study, and Clean Living**.
 
-It is built as a precision instrument: dark, fast, quiet, monospace numerals, hand-rolled SVGs, and CSS 3D physics. It runs with zero network requests unless you opt into cloud sync.
+The **source and GitHub Pages demo are public**. Your training data is not: it stays in this browser (`localStorage` key `kept.v1`) unless you opt into your own Supabase project. There are no other users, no shared feed, and no server-side ledger in the default build.
 
-**Live:** <https://2410305056-tech.github.io/kept/>
+It is built as a precision instrument: dark, fast, quiet, monospace numerals, hand-rolled SVGs, and CSS 3D physics. It makes zero network requests unless cloud sync is configured.
+
+**Live:** <https://2410305056-tech.github.io/kept/>  
+**License:** [MIT](LICENSE)
 
 ---
 
@@ -75,7 +78,7 @@ npm run build
 npm run lint
 ```
 
-The UI checks (calendar interactions, FLIP panel, timer accuracy, mobile chart taps) still need a browser/phone pass.
+Logic, seed, dates, and import validation are covered by `npm test`. Calendar FLIP, rest-timer feel, and chart taps are exercised on the live Pages build; they are not in the Node matrix.
 
 ---
 
