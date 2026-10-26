@@ -1,9 +1,10 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useState } from "react";
 import { HashRouter, Routes, Route, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 import { AppShell } from "./components/layout/AppShell.jsx";
 import { useReducedMotion } from "./hooks/useReducedMotion.js";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary.jsx";
+import { BootSplash } from "./components/ui/BootSplash.jsx";
 
 const CalendarPage = lazy(() => import("./routes/CalendarPage.jsx").then((m) => ({ default: m.CalendarPage })));
 const GymPage = lazy(() => import("./routes/GymPage.jsx").then((m) => ({ default: m.GymPage })));
@@ -47,13 +48,20 @@ function AnimatedRoutes() {
 }
 
 export function App() {
+  const [booting, setBooting] = useState(true);
+
   return (
-    <HashRouter>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route path="/*" element={<AnimatedRoutes />} />
-        </Route>
-      </Routes>
-    </HashRouter>
+    <>
+      {booting ? <BootSplash onDone={() => setBooting(false)} /> : null}
+      <div style={{ visibility: booting ? "hidden" : "visible" }}>
+        <HashRouter>
+          <Routes>
+            <Route element={<AppShell />}>
+              <Route path="/*" element={<AnimatedRoutes />} />
+            </Route>
+          </Routes>
+        </HashRouter>
+      </div>
+    </>
   );
 }
