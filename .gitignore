@@ -1,23 +1,11 @@
-# Dependencies
+**/*.log
 node_modules/
 **/node_modules/
-
-# Production builds
 dist/
 **/dist/
-
-# Environment variables
 .env
-.env.local
-*.env
-
-# System files & logs
+.env.*
+!.env.example
+!.env.*.example
+backend/data/
 .DS_Store
-Thumbs.db
-*.log
-npm-debug.log*
-
-# Backups & Archives
-archive/
-*.zip
-
